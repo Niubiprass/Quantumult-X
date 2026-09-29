@@ -23,35 +23,51 @@
  *   POST /api/v1/users/wallet/checkin     → 执行签到（body: {captcha_token}）
  *   GET  /api/v1/users/wallet             → 查询余额（积分）
  *
- * ── Quantumult X 配置 ───────────────────────────────────────────────
+ * ── Quantumult X 配置（复制到你的配置文件）───────────────────────────
  *
  *   [task_local]
- *   # 每天早上 9:07 自动签到
- *   7 9 * * * MonkeyCode.js, tag=MonkeyCode签到, enabled=true
+ *   # 每天早上 9:07 自动签到（QX 是 6 段 cron：秒 分 时 日 月 周）
+ *   0 7 9 * * * https://raw.githubusercontent.com/Niubiprass/Quantumult-X/main/Scripts/MonkeyCode.js, tag=MonkeyCode签到, enabled=true
  *
- *   [rewrite_local]
- *   # 可选：自动捕获登录 Cookie（若你不想填密码，见下方说明）
- *   ^https:\/\/monkeycode-ai\.com\/api\/v1\/users\/(password-login|login) url script-request-header MonkeyCode.js
+ *   注意：账号不要写在 task_local 行里，用下面的 CONFIG 区填写。
  *
- *   [mitm]
- *   hostname = monkeycode-ai.com
+ * ── 账号配置（三种方式，优先用方式 A）───────────────────────────────
  *
- * ── 账号配置（两种方式，任选其一）───────────────────────────────────
+ *   方式 A（推荐）：直接改本文件下面「账号配置区」的 CONFIG.accounts，
+ *                  填好邮箱和密码即可，无需任何额外设置。
  *
- *   方式 A（推荐，全自动）：在 [task_local] 里直接写账号，多个用 & 连接
- *     MONKEYCODE_ACCOUNTS=邮箱1,密码1&邮箱2,密码2
+ *   方式 B：抓 Cookie。在 QX 里打开 MonkeyCode 网站并登录，
+ *          用抓包工具取出请求头里的 Cookie，填到 CONFIG.cookies。
  *
- *   方式 B（不想存密码）：手动抓 Cookie 填进去
- *     MONKEYCODE_COOKIES=Cookie字符串1&Cookie字符串2
- *
- *   QX 中写法示例：
- *   7 9 * * * MonkeyCode.js, tag=MonkeyCode签到, enabled=true,
- *       env=MONKEYCODE_ACCOUNTS=me@qq.com,mypassword
+ *   方式 C：环境变量（进阶）。脚本会依次读取
+ *          $environment → process.env → $prefs 中的
+ *          MONKEYCODE_ACCOUNTS / MONKEYCODE_COOKIES。
+ *          多账号用 & 分隔，格式：邮箱1,密码1&邮箱2,密码2
  *
  * ── 免责声明 ────────────────────────────────────────────────────────
  *   本脚本仅用于个人账号的自动化签到，请勿用于批量注册、恶意刷积分等
  *   违反平台服务条款的行为。使用风险自负。
  */
+
+/* ======================= 账号配置区（改这里） ======================= */
+
+const CONFIG = {
+  /**
+   * 邮箱密码方式（推荐）。可填多个，每个一行。
+   * 格式：['邮箱', '密码']
+   */
+  accounts: [
+    // ['你的邮箱@example.com', '你的密码'],
+  ],
+
+  /**
+   * Cookie 方式（可选，不想存密码就用这个）。
+   * 每项是一个完整 Cookie 字符串。
+   */
+  cookies: [
+    // 'xxx=yyy; zzz=www',
+  ],
+};
 
 /* ============================ 基础常量 ============================ */
 
@@ -337,7 +353,23 @@ async function solveCaptcha(enabled) {
 function parseAccounts() {
   const accounts = [];
 
-  // 方式 A：邮箱,密码
+  // 方式 A（最优先）：脚本顶部 CONFIG 区直接填写的账号
+  if (typeof CONFIG !== 'undefined' && Array.isArray(CONFIG.accounts)) {
+    CONFIG.accounts.forEach((item) => {
+      if (Array.isArray(item) && item.length >= 2 && item[0] && item[1]) {
+        accounts.push({ email: String(item[0]).trim(), password: String(item[1]).trim() });
+      }
+    });
+  }
+
+  // 方式 A2：脚本顶部 CONFIG 区直接填写的 Cookie
+  if (typeof CONFIG !== 'undefined' && Array.isArray(CONFIG.cookies)) {
+    CONFIG.cookies.forEach((ck) => {
+      if (ck && String(ck).trim()) accounts.push({ cookie: String(ck).trim() });
+    });
+  }
+
+  // 方式 B：环境变量 MONKEYCODE_ACCOUNTS（格式：邮箱,密码 多账号用 & 连接）
   const accEnv = readEnv('MONKEYCODE_ACCOUNTS');
   if (accEnv) {
     accEnv.split('&').forEach((item) => {
@@ -348,7 +380,7 @@ function parseAccounts() {
     });
   }
 
-  // 方式 B：Cookie
+  // 方式 C：环境变量 MONKEYCODE_COOKIES
   const ckEnv = readEnv('MONKEYCODE_COOKIES');
   if (ckEnv) {
     ckEnv.split('&').forEach((ck) => {
