@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 敏感文件：证书与账号凭据绝不入库
+*.p12
+*.pfx
+*.cer
+*.key
+secrets/
+accounts.env
+
+# 临时文件
+*.log
+*.tmp
